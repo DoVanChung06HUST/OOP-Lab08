@@ -1,0 +1,153 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+\usepackage{array,tabularx,booktabs,tikz,hyperref,fancyvrb}
+\usetikzlibrary{arrows.meta,positioning}
+\hypersetup{colorlinks=true,urlcolor=blue}
+\sloppy
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\begin{document}
+\begin{center}
+{\Large\bfseries BÁO CÁO THỰC HÀNH LAB 08}\\[5pt]
+{\large Delegate và Event trong quản lý thiết bị}\\[10pt]
+Đỗ Văn Chung -- MSSV: 202418855\\
+Mã lớp: 174373 -- Lập trình hướng đối tượng\\
+Ngày lập: 01/11/2026
+\end{center}
+\textbf{Mã nguồn:} thư mục Source trong gói bài làm. Chưa có đường dẫn GitHub Lab 08 được cung cấp; cần bổ sung URL sau khi đẩy mã nguồn.
+\section{Phân tích yêu cầu nghiệp vụ}
+Hệ thống theo dõi điều khiển máy chiếu, điều khiển điều hòa và micro không dây. Thiết bị công bố thay đổi trạng thái, pin yếu, tín hiệu yếu hoặc mất phản hồi. Các thành phần thông báo, ghi log và bảo trì đăng ký nhận sự kiện mà không làm thay đổi lớp thiết bị.
+
+Hai sự kiện chính là \texttt{StatusChanged} và \texttt{AlertRaised}. Dữ liệu sự kiện gồm mã thiết bị, thời điểm và nội dung tương ứng. Sự kiện trạng thái chứa trạng thái cũ/mới; cảnh báo chứa thông điệp và mức Information, Warning hoặc Critical.
+
+\begin{tabularx}{\linewidth}{@{}p{3.4cm}XX@{}}\toprule
+Thiết bị & Warning & Critical\\\midrule
+Máy chiếu & Pin từ 1 đến 19\% & Pin bằng 0\%\\
+Micro & Pin 1--29\%; tín hiệu 1--39\% & Pin hoặc tín hiệu bằng 0\%\\
+Điều hòa & Không quy định & Phản hồi chuyển thành không phản hồi\\\bottomrule
+\end{tabularx}
+\section{Thiết kế trước cài đặt}
+\textbf{Publisher:} TeachingDevice và các lớp dẫn xuất. \textbf{Subscriber:} ConsoleNotificationService, DeviceAuditLogger, MaintenanceService và FilteredAlertSubscriber. Coordinator quản lý vòng đời đăng ký.
+
+Thiết bị không gọi trực tiếp MaintenanceService vì điều đó gắn mô hình nghiệp vụ với một cách xử lý cụ thể. Event cho phép thêm email hoặc dashboard mà không sửa publisher.
+
+Tách StatusChanged và AlertRaised vì dữ liệu và mục đích khác nhau. Dùng chung AlertRaised cho pin, tín hiệu, mất phản hồi vì chúng có cùng cấu trúc cảnh báo. Nếu cần phân loại bằng máy trong hệ thống lớn, có thể bổ sung trường AlertCode thay vì phân tích Message.
+
+Chỉ publisher có quyền phát event. Mã bên ngoài chỉ đăng ký/hủy bằng += và -=. Lớp con phát qua RaiseAlert hoặc On... được bảo vệ. Các phương thức On... là protected virtual.
+\newpage
+\section{Danh sách lớp và sơ đồ quan hệ}
+\begin{tabularx}{\linewidth}{@{}p{6.5cm}X@{}}\toprule
+Lớp/kiểu & Trách nhiệm\\\midrule
+TeachingDevice & Id, Name, Status; công bố hai event\\
+ProjectorRemote & Cập nhật và kiểm tra pin máy chiếu\\
+AirConditionerRemote & Phòng phụ trách và khả năng phản hồi\\
+WirelessMicrophone & Kiểm tra pin và chất lượng tín hiệu\\
+DeviceStatusChangedEventArgs & Dữ liệu bất biến về đổi trạng thái\\
+DeviceAlertEventArgs & Dữ liệu bất biến về cảnh báo\\
+ConsoleNotificationService & In cảnh báo ra màn hình\\
+DeviceAuditLogger & Lưu lịch sử trạng thái dạng chỉ đọc\\
+MaintenanceService & Tạo yêu cầu khi nhận Critical\\
+AlertFilter (delegate) & Nhận cảnh báo, trả về bool\\
+FilteredAlertSubscriber & Áp dụng bộ lọc rồi gọi Action\\
+DeviceMonitoringCoordinator & Subscribe, Unsubscribe, Dispose\\
+InvalidDeviceReadingException & Giữ DeviceId và InvalidValue\\\bottomrule
+\end{tabularx}
+
+\begin{center}
+\begin{tikzpicture}[font=\scriptsize,box/.style={draw,rounded corners,align=center,text width=3.7cm,minimum height=0.8cm},>=Stealth]
+\node[box] (base) {\textbf{TeachingDevice (abstract)}\\StatusChanged; AlertRaised};
+\node[box,below=1cm of base] (ac) {AirConditionerRemote};
+\node[box,left=0.3cm of ac] (pr) {ProjectorRemote};
+\node[box,right=0.3cm of ac] (mi) {WirelessMicrophone};
+\draw[-{Triangle[open]}] (ac)--(base);
+\draw[-{Triangle[open]}] (pr.north)--++(0,0.3)-|(base.west);
+\draw[-{Triangle[open]}] (mi.north)--++(0,0.3)-|(base.east);
+\node[box,above=1cm of base] (co) {DeviceMonitoring\\Coordinator (IDisposable)};
+\node[box,left=0.3cm of co] (subs) {Notification / Audit / Maintenance\\các subscriber độc lập};
+\node[box,right=0.3cm of co] (args) {Hai lớp EventArgs\\dữ liệu sự kiện};
+\draw[->] (co)--node[right]{đăng ký/hủy}(base);
+\draw[->] (co)--(subs);
+\draw[->,dashed] (base.east)--(args.south);
+\end{tikzpicture}
+\end{center}
+Mũi tên tam giác rỗng biểu diễn kế thừa; mũi tên thường biểu diễn sử dụng/tham chiếu. Sơ đồ tóm tắt các quan hệ chính, không đồng nhất ba subscriber thành một lớp.
+
+FilteredAlertSubscriber giữ hai delegate: AlertFilter và Action\textless DeviceAlertEventArgs\textgreater. Bộ lọc trả về true thì callback Action mới được gọi. Coordinator chỉ quản lý ba dịch vụ chính; callback bổ sung được đăng ký riêng và hủy trong finally.
+\newpage
+\section{Quy tắc cài đặt và xử lý ngoại lệ}
+\textbf{Cảnh báo theo vùng.} Mỗi chỉ số có ba vùng: an toàn, Warning, Critical. Khi giá trị chuyển sang một vùng nguy hiểm khác thì phát một cảnh báo. Trong cùng vùng không báo lặp. Phục hồi an toàn không phát cảnh báo; lần tụt tiếp theo được phát lại. Chuyển từ 0 lên 10 vẫn phát Warning vì thiết bị còn yếu, nhưng đã chuyển khỏi Critical. Pin và tín hiệu micro được theo dõi riêng.
+
+\textbf{Tính nhất quán.} Giá trị ngoài 0--100 bị từ chối trước khi sửa dữ liệu. Khi đổi trạng thái hợp lệ, lưu OldStatus, cập nhật Status rồi mới gọi event. Cập nhật cùng trạng thái không tạo log mới. Enum không hợp lệ cũng bị từ chối.
+
+\textbf{Vòng đời đăng ký.} Subscribe có cờ chống trùng; danh sách thiết bị đầu vào được loại trùng. Unsubscribe chỉ tháo các handler của coordinator. Dispose gọi Unsubscribe và không cho đăng ký lại. Các thiết bị tiếp tục tồn tại sau khi coordinator bị hủy.
+
+\textbf{Giới hạn event đồng bộ.} Bài dùng multicast chuẩn qua ?.Invoke. Nếu một handler ném ngoại lệ, các handler đứng sau có thể không được gọi. Trạng thái đã đổi trước event không tự quay lại. Nhóm thử số 9 minh họa rõ hành vi này. Trong sản phẩm thực tế có thể tách handler, ghi nhận lỗi và tiếp tục, nhưng phải xác định chính sách xử lý lỗi trước; không nên nuốt ngoại lệ âm thầm.
+
+\section{Delegate, event và khả năng mở rộng}
+Delegate là kiểu tham chiếu đến phương thức có chữ ký phù hợp. AlertFilter là delegate tự định nghĩa trả bool; Action nhận cảnh báo và không trả giá trị. Lambda giúp cấu hình chính sách tại nơi sử dụng.
+
+Event giới hạn quyền thao tác với danh sách delegate: subscriber không được thay toàn bộ danh sách hoặc tự gọi sự kiện. EventHandler\textless TEventArgs\textgreater truyền sender và dữ liệu sự kiện. Publisher không cần biết có bao nhiêu subscriber.
+
+Ví dụ callback trong chương trình chỉ nhận Critical. Cùng một cảnh báo Critical đồng thời có thể được in, tạo yêu cầu bảo trì, đếm và xử lý bởi callback. MaintenanceService lọc Severity và không tự chuyển trạng thái thiết bị, tránh đưa chính sách chưa có trong đề vào publisher.
+
+Đánh đổi: kiến trúc giảm phụ thuộc trực tiếp nhưng luồng thực thi khó theo dõi hơn. Cần quản lý đăng ký, tránh giữ tham chiếu ngoài ý muốn và kiểm soát ngoại lệ ở subscriber.
+\newpage
+\section{Kết quả chạy và kiểm thử}
+\input{verification.tex}
+\begin{tabularx}{\linewidth}{@{}p{0.7cm}p{4.2cm}X@{}}\toprule
+STT & Nhóm minh họa & Kết quả cần đối chiếu\\\midrule
+1 & Đổi trạng thái & 3 log; không log trùng; handler thấy trạng thái mới\\
+2 & Pin máy chiếu & Qua 20, 19, 10, 0; không lặp; phục hồi rồi cảnh báo lại\\
+3 & Phản hồi điều hòa & 2 Critical cho hai lần mất phản hồi riêng biệt\\
+4 & Pin và tín hiệu micro & 2 Warning, 2 Critical; tổng callback Critical là 5\\
+5 & Giá trị không hợp lệ & 6 ngoại lệ; reading và số cảnh báo giữ nguyên\\
+6 & Bảo trì & 5 yêu cầu từ Critical tại thời điểm thống kê\\
+7 & Hủy/đăng ký lại & Các handler độc lập vẫn nhận; đăng ký lại không trùng\\
+8 & Dispose / không subscriber & Không còn log; cấm Subscribe lại; thiết bị độc lập hoạt động\\
+9 & Handler ném ngoại lệ & Ngoại lệ truyền ra; handler sau không chạy; trạng thái đã đổi\\\bottomrule
+\end{tabularx}
+
+\textbf{Hướng dẫn chạy trên máy cá nhân}
+\begin{Verbatim}[fontsize=\small]
+cd Source
+dotnet run
+\end{Verbatim}
+Nếu terminal đang ở thư mục chứa Source, dùng:
+\begin{Verbatim}[fontsize=\small]
+dotnet run --project Source/Lab08.csproj
+\end{Verbatim}
+Dự án mặc định net8.0. Nếu máy chỉ có SDK/runtime .NET 10, đổi TargetFramework trong Lab08.csproj thành net10.0 rồi lưu file trước khi chạy. Chương trình trả mã thoát 1 nếu có đối chiếu sai.
+
+\textbf{Ảnh kết quả:} chưa có ảnh chạy trên máy sinh viên trong phiên Lab 08. Khi bổ sung, đặt ảnh ngay tại mục 6 này, trước phần sử dụng AI. Không sử dụng ảnh của Lab 07 làm bằng chứng cho Lab 08.
+\newpage
+\section{Sử dụng AI và tự phản biện}
+\textbf{Nội dung đã diễn ra trong phiên này.} Người học cung cấp đề Lab 08 và yêu cầu: ``tiếp tục với bài tập tuần này''. AI đọc đề, lập thiết kế, hỗ trợ cài đặt và soạn báo cáo. Tệp DESIGN.md được tạo trước các tệp C\# trong phiên hỗ trợ này. Điều đó không phải bằng chứng sinh viên đã tự cài đặt và commit trước khi dùng AI.
+
+\textbf{Các quyết định cần tự giải thích.} Vì sao không gọi trực tiếp MaintenanceService? Vì sao dùng hai event thay vì một? Vì sao ChangeStatus phải cập nhật trước khi phát? Vì sao Unsubscribe coordinator không hủy callback độc lập? Khi handler ném lỗi, điều gì đã thay đổi và điều gì chưa chạy?
+
+\textbf{Gợi ý prompt học tiếp (không phải lịch sử đã thực hiện):}
+\begin{enumerate}
+\item ``Giải thích khác nhau giữa event và một trường delegate public bằng ví dụ.''
+\item ``Đánh giá quy tắc cảnh báo khi pin từ 0 lên 10; ưu nhược điểm của cảnh báo theo vùng là gì?''
+\item ``Vì sao đăng ký cùng handler hai lần có thể tạo hai yêu cầu bảo trì?''
+\item ``Phân tích kết quả khi subscriber đầu ném exception; đề xuất cách cô lập lỗi và đánh đổi.''
+\end{enumerate}
+
+\textbf{Kết luận tự đánh giá cần hoàn thiện sau khi chạy.} Người học cần đọc lại mã, chạy các tình huống, kiểm tra kết quả trên máy, bổ sung ảnh và URL GitHub. Báo cáo hiện ghi nhận đúng phạm vi hỗ trợ; không tạo lịch sử trao đổi hoặc commit không có thật.
+
+\section{Tài liệu và cấu trúc bài nộp}
+\begin{enumerate}
+\item Đề ``lab w08-delegate.pdf'', chủ đề Delegate \& Event.
+\item Bài giảng ``MI-OOP-Bai 14 delegate.pdf'', phần delegate, callback, multicast và event.
+\end{enumerate}
+
+\texttt{Source/}: Events.cs, Devices.cs, Subscribers.cs, DeviceMonitoringCoordinator.cs, Program.cs, Lab08.csproj.\\
+\texttt{DESIGN.md}: thiết kế và quy tắc trước cài đặt.\\
+\texttt{Report/}: báo cáo PDF, nguồn LaTeX và thông tin xác minh.\\
+\texttt{README.md}: hướng dẫn chạy và đóng gói.\\
+\texttt{AI\_SESSION.md}: ghi nhận hỗ trợ AI.
+\end{document}

@@ -1,0 +1,69 @@
+LAB 08 - DELEGATE & EVENT
+Đỗ Văn Chung - 202418855 - Lớp 174373
+
+========== 1. THAY ĐỔI TRẠNG THÁI, KHÔNG GHI LOG TRÙNG ==========
+2026-11-01 22:12:12: MC01, Available -> Borrowed
+2026-11-01 22:12:12: MC01, Borrowed -> Available
+2026-11-01 22:12:12: MC01, Available -> UnderMaintenance
+Đối chiếu: 3 log; cập nhật trước event; Subscribe hai lần không trùng => ĐÚNG
+
+========== 2. PIN MÁY CHIẾU: 100 -> 20 -> 19 -> 10 -> 0 -> 0 ==========
+[Warning] MC01: Pin máy chiếu: 20% -> 19%.
+[Critical] MC01: Pin máy chiếu: 10% -> 0%.
+CALLBACK CRITICAL: MC01 - Pin máy chiếu: 10% -> 0%.
+Đối chiếu: 1 Warning, 1 Critical; cùng vùng không lặp => ĐÚNG
+[Warning] MC01: Pin máy chiếu: 0% -> 10%.
+[Warning] MC01: Pin máy chiếu: 100% -> 19%.
+Đối chiếu: 0 -> 10 cảnh báo Warning; hồi phục rồi xuống thấp cảnh báo lại => ĐÚNG
+
+========== 3. ĐIỀU HÒA MẤT PHẢN HỒI ==========
+[Critical] DH01: Điều hòa phòng A203 không phản hồi.
+CALLBACK CRITICAL: DH01 - Điều hòa phòng A203 không phản hồi.
+[Critical] DH01: Điều hòa phòng A203 không phản hồi.
+CALLBACK CRITICAL: DH01 - Điều hòa phòng A203 không phản hồi.
+Đối chiếu: Hai lần mất phản hồi, không báo lặp khi vẫn mất => ĐÚNG
+
+========== 4. PIN VÀ TÍN HIỆU MICRO ==========
+[Warning] MI01: Pin micro: 30% -> 29%.
+[Critical] MI01: Pin micro: 20% -> 0%.
+CALLBACK CRITICAL: MI01 - Pin micro: 20% -> 0%.
+[Warning] MI01: Tín hiệu micro: 40% -> 39%.
+[Critical] MI01: Tín hiệu micro: 30% -> 0%.
+CALLBACK CRITICAL: MI01 - Tín hiệu micro: 30% -> 0%.
+Đối chiếu: Micro có 2 Warning và 2 Critical => ĐÚNG
+Đối chiếu: AlertFilter + Action chỉ xử lý 5 Critical => ĐÚNG
+
+========== 5. DỮ LIỆU SAI KHÔNG ĐỔI TRẠNG THÁI, KHÔNG PHÁT EVENT ==========
+Đã bắt InvalidDeviceReadingException: Thiết bị MC01: giá trị -1 ngoài khoảng 0..100.
+Đã bắt InvalidDeviceReadingException: Thiết bị MC01: giá trị 101 ngoài khoảng 0..100.
+Đã bắt InvalidDeviceReadingException: Thiết bị MI01: giá trị -1 ngoài khoảng 0..100.
+Đã bắt InvalidDeviceReadingException: Thiết bị MI01: giá trị 101 ngoài khoảng 0..100.
+Đã bắt InvalidDeviceReadingException: Thiết bị MI01: giá trị -1 ngoài khoảng 0..100.
+Đã bắt InvalidDeviceReadingException: Thiết bị MI01: giá trị 101 ngoài khoảng 0..100.
+Đối chiếu: 6 giá trị ngoài miền đều bị chặn, dữ liệu giữ nguyên => ĐÚNG
+
+========== 6. DANH SÁCH YÊU CẦU BẢO TRÌ ==========
+Yêu cầu bảo trì MC01: Pin máy chiếu: 10% -> 0%.
+Yêu cầu bảo trì DH01: Điều hòa phòng A203 không phản hồi.
+Yêu cầu bảo trì DH01: Điều hòa phòng A203 không phản hồi.
+Yêu cầu bảo trì MI01: Pin micro: 20% -> 0%.
+Yêu cầu bảo trì MI01: Tín hiệu micro: 30% -> 0%.
+Đối chiếu: Chỉ Critical tạo yêu cầu; dịch vụ không tự đổi trạng thái => ĐÚNG
+
+========== 7. HỦY ĐĂNG KÝ VÀ ĐĂNG KÝ LẠI ==========
+CALLBACK CRITICAL: MC01 - Pin máy chiếu: 19% -> 0%.
+Đối chiếu: Coordinator ngừng nhận; callback đăng ký độc lập vẫn chạy => ĐÚNG
+CALLBACK CRITICAL: MC01 - Pin máy chiếu: 100% -> 0%.
+[Critical] MC01: Pin máy chiếu: 100% -> 0%.
+Đối chiếu: Đăng ký lại đúng một lần => ĐÚNG
+
+========== 8. DISPOSE VÀ PUBLISHER KHÔNG CÓ SUBSCRIBER ==========
+Đối chiếu: Dispose đã hủy handler => ĐÚNG
+Đối chiếu: Không Subscribe coordinator đã Dispose => ĐÚNG
+Đối chiếu: Không có subscriber vẫn hoạt động => ĐÚNG
+
+========== 9. GIỚI HẠN MULTICAST KHI HANDLER NÉM NGOẠI LỆ ==========
+Lỗi giả lập từ subscriber
+Đối chiếu: Ngoại lệ truyền ra; handler sau không chạy; trạng thái đã đổi không rollback => ĐÚNG
+
+HOÀN THÀNH 9 NHÓM. 14 đối chiếu, sai: 0.
